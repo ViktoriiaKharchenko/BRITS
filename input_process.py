@@ -42,7 +42,21 @@ std = np.array(
      9.062327978713556, 106.50939503021543, 170.65318497610315, 14.856134327604906, 1.6369529387005546,
      133.96778334724377])
 
-fs = open('./json/json', 'w')
+def split_data(patient_ids, train_ratio=0.8):
+    """Splits patient_ids into training and testing sets based on train_ratio."""
+    np.random.shuffle(patient_ids)  # Randomly shuffle patient_ids
+    train_size = int(len(patient_ids) * train_ratio)
+    train_ids = patient_ids[:train_size]
+    test_ids = patient_ids[train_size:]
+    return train_ids, test_ids
+
+
+# Split patient_ids into training and testing sets
+train_ids, test_ids = split_data(np.array(patient_ids))
+
+# Open separate files for training and testing data
+fs_train = open('./json/train.json', 'w')
+fs_test = open('./json/test.json', 'w')
 
 def to_time_bin(x):
     h, m = map(int, x.split(':'))
@@ -114,7 +128,7 @@ class NumpyEncoder(json.JSONEncoder):
         # Let the base class default method raise the TypeError
         return json.JSONEncoder.default(self, obj)
 
-def parse_id(id_):
+def parse_id(id_, file_stream):
     data = pd.read_csv('./raw/{}.txt'.format(id_))
     # accumulate the records within one hour
     data['Time'] = data['Time'].apply(lambda x: to_time_bin(x))
@@ -157,16 +171,19 @@ def parse_id(id_):
 
     rec = json.dumps(rec, cls=NumpyEncoder)
 
-    fs.write(rec + '\n')
+    file_stream.write(rec + '\n')
 
 
 for id_ in patient_ids:
     print('Processing patient {}'.format(id_))
     try:
-        parse_id(id_)
+        if id_ in train_ids:
+            parse_id(id_, fs_train)
+        else:
+            parse_id(id_, fs_test)
     except Exception as e:
         print(e)
         continue
 
-fs.close()
-
+fs_train.close()
+fs_test.close()
