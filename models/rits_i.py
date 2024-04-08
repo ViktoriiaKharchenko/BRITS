@@ -98,9 +98,7 @@ class Model(nn.Module):
         imputations = []
 
         for t in range(SEQ_LEN):
-            print(masks.shape)
-            print(values.shape)
-            print(values)
+
             x = values[:, t, :]
             m = masks[:, t, :]
             d = deltas[:, t, :]

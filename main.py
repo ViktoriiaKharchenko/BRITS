@@ -21,6 +21,7 @@ from ipdb import set_trace
 import sys
 sys.path.append('D:/BRITS-master')
 
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', type=int, default=1000)
 parser.add_argument('--batch_size', type=int, default=32)
@@ -48,6 +49,7 @@ def train(model):
             run_loss += ret['loss'].item()
 
             print('\r Progress epoch {}, {:.2f}%, average loss {}'.format(epoch, (idx + 1) * 100.0 / len(data_iter), run_loss / (idx + 1.0))),
+
 
         evaluate(model, data_iter)
 
@@ -95,12 +97,14 @@ def evaluate(model, val_iter):
 
     print ('AUC {}'.format(metrics.roc_auc_score(labels, preds)))
 
+
     evals = np.asarray(evals)
     imputations = np.asarray(imputations)
 
     print ('MAE', np.abs(evals - imputations).mean())
 
     print ('MRE', np.abs(evals - imputations).sum() / np.abs(evals).sum())
+
 
     save_impute = np.concatenate(save_impute, axis=0)
     save_label = np.concatenate(save_label, axis=0)

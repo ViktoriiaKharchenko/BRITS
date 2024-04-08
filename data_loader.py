@@ -24,10 +24,6 @@ class MySet(Dataset):
 
     def __getitem__(self, idx):
         rec = json.loads(self.content[idx])
-        forward_masks = rec['forward']['masks']
-        backward_masks = rec['backward']['masks']
-        #print("Forward Masks:", forward_masks)
-        #print("Backward Masks:", backward_masks)
 
         if idx in self.val_indices:
             rec['is_train'] = 0

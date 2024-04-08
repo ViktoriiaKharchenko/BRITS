@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import json
 
+
 patient_ids = []
 
 for filename in os.listdir('./raw'):
@@ -55,6 +56,7 @@ def parse_data(x):
 
     for attr in attributes:
         if attr in x:
+
             values.append(x[attr])
         else:
             values.append(np.nan)
@@ -81,6 +83,7 @@ def parse_rec(values, masks, evals, eval_masks, dir_):
 
     # only used in GRU-D
     forwards = pd.DataFrame(values).fillna(method='ffill').fillna(0.0).to_numpy()
+
 
     rec = {}
 
