@@ -1,10 +1,12 @@
 import copy
+from math import sqrt
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
-
+from torch.utils.data import TensorDataset, DataLoader
 import numpy as np
 
 import time
@@ -19,6 +21,9 @@ from sklearn import metrics
 
 from ipdb import set_trace
 import sys
+
+from support.early_stopping import EarlyStopping
+
 sys.path.append('D:/BRITS-master')
 
 
@@ -32,10 +37,10 @@ parser.add_argument('--label_weight', type=float)
 args = parser.parse_args()
 
 
-def train(model):
+def train(model, early_stopping):
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
-    data_iter = data_loader.get_loader(batch_size=args.batch_size)
+    data_iter = data_loader.get_train_loader(batch_size=args.batch_size)
 
     for epoch in range(args.epochs):
         model.train()
@@ -50,8 +55,13 @@ def train(model):
 
             print('\r Progress epoch {}, {:.2f}%, average loss {}'.format(epoch, (idx + 1) * 100.0 / len(data_iter), run_loss / (idx + 1.0))),
 
+        valid_loss = evaluate(model, data_iter)
+        # early stop
+        early_stopping(valid_loss, model)
 
-        evaluate(model, data_iter)
+        if early_stopping.early_stop:
+            print("Early stopping")
+            break
 
 
 def evaluate(model, val_iter):
@@ -104,6 +114,7 @@ def evaluate(model, val_iter):
     print ('MAE', np.abs(evals - imputations).mean())
 
     print ('MRE', np.abs(evals - imputations).sum() / np.abs(evals).sum())
+    print('RMSE',sqrt(metrics.mean_squared_error(evals,imputations)))
 
 
     save_impute = np.concatenate(save_impute, axis=0)
@@ -111,6 +122,23 @@ def evaluate(model, val_iter):
 
     np.save('./result/{}_data'.format(args.model), save_impute)
     np.save('./result/{}_label'.format(args.model), save_label)
+
+    return sqrt(metrics.mean_squared_error(evals,imputations))
+
+
+def evaluate_model():
+    model = getattr(models,
+                    args.model).Model(args.hid_size, args.impute_weight,
+                                      args.label_weight)
+    total_params = sum(p.numel() for p in model.parameters()
+                       if p.requires_grad)
+    print('Total params is {}'.format(total_params))
+
+    if torch.cuda.is_available():
+        model = model.cuda()
+
+    savepath='./result/brits_data.pt'
+    #test(model,savepath)
 
 
 def run():
@@ -121,9 +149,13 @@ def run():
     if torch.cuda.is_available():
         model = model.cuda()
 
-    train(model)
+    patience = 2
+    early_stopping = EarlyStopping(savepath='./result/imputation_model.pt',patience=patience, verbose=True)
+
+    train(model, early_stopping)
 
 
 if __name__ == '__main__':
     run()
+
 
