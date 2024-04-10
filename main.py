@@ -125,6 +125,13 @@ def evaluate(model, val_iter):
 
     return sqrt(metrics.mean_squared_error(evals,imputations))
 
+def test(model, savepath):
+
+    model.load_state_dict(torch.load(savepath))
+
+    test_data_iter = data_loader.get_test_loader(
+        batch_size=args.batch_size)
+    valid_loss = evaluate(model, test_data_iter)
 
 def evaluate_model():
     model = getattr(models,
@@ -137,22 +144,23 @@ def evaluate_model():
     if torch.cuda.is_available():
         model = model.cuda()
 
-    savepath='./result/brits_data.pt'
-    #test(model,savepath)
+    savepath='./result/imputation_model.pt'
+    test(model,savepath)
 
 
 def run():
-    model = getattr(models, args.model).Model(args.hid_size, args.impute_weight, args.label_weight)
-    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print('Total params is {}'.format(total_params))
-
-    if torch.cuda.is_available():
-        model = model.cuda()
-
-    patience = 2
-    early_stopping = EarlyStopping(savepath='./result/imputation_model.pt',patience=patience, verbose=True)
-
-    train(model, early_stopping)
+    # model = getattr(models, args.model).Model(args.hid_size, args.impute_weight, args.label_weight)
+    # total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    # print('Total params is {}'.format(total_params))
+    #
+    # if torch.cuda.is_available():
+    #     model = model.cuda()
+    #
+    # patience = 2
+    # early_stopping = EarlyStopping(savepath='./result/imputation_model.pt',patience=patience, verbose=True)
+    #
+    # train(model, early_stopping)
+    evaluate_model()
 
 
 if __name__ == '__main__':
