@@ -57,9 +57,10 @@ class TemporalDecay(nn.Module):
         return gamma
 
 class Model(nn.Module):
-    def __init__(self, rnn_hid_size, impute_weight, label_weight):
+    def __init__(self, input_size, rnn_hid_size, impute_weight, label_weight):
         super(Model, self).__init__()
 
+        self.input_size = input_size
         self.rnn_hid_size = rnn_hid_size
         self.impute_weight = impute_weight
         self.label_weight = label_weight
@@ -67,10 +68,10 @@ class Model(nn.Module):
         self.build()
 
     def build(self):
-        self.rnn_cell = nn.LSTMCell(35 * 2, self.rnn_hid_size)
+        self.rnn_cell = nn.LSTMCell(self.input_size * 2, self.rnn_hid_size)
 
-        self.regression = nn.Linear(self.rnn_hid_size, 35)
-        self.temp_decay = TemporalDecay(input_size = 35, rnn_hid_size = self.rnn_hid_size)
+        self.regression = nn.Linear(self.rnn_hid_size, self.input_size)
+        self.temp_decay = TemporalDecay(input_size = self.input_size, rnn_hid_size = self.rnn_hid_size)
 
         self.out = nn.Linear(self.rnn_hid_size, 1)
 

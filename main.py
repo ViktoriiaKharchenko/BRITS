@@ -105,7 +105,7 @@ def evaluate(model, val_iter):
     labels = np.asarray(labels).astype('int32')
     preds = np.asarray(preds)
 
-    print ('AUC {}'.format(metrics.roc_auc_score(labels, preds)))
+    #print ('AUC {}'.format(metrics.roc_auc_score(labels, preds)))
 
 
     evals = np.asarray(evals)
@@ -116,12 +116,12 @@ def evaluate(model, val_iter):
     print ('MRE', np.abs(evals - imputations).sum() / np.abs(evals).sum())
     print('RMSE',sqrt(metrics.mean_squared_error(evals,imputations)))
 
-
-    save_impute = np.concatenate(save_impute, axis=0)
-    save_label = np.concatenate(save_label, axis=0)
-
-    np.save('./result/{}_data'.format(args.model), save_impute)
-    np.save('./result/{}_label'.format(args.model), save_label)
+    #
+    # save_impute = np.concatenate(save_impute, axis=0)
+    # save_label = np.concatenate(save_label, axis=0)
+    #
+    # np.save('./result/{}_data'.format(args.model), save_impute)
+    # np.save('./result/{}_label'.format(args.model), save_label)
 
     return sqrt(metrics.mean_squared_error(evals,imputations))
 
@@ -135,7 +135,7 @@ def test(model, savepath):
 
 def evaluate_model():
     model = getattr(models,
-                    args.model).Model(args.hid_size, args.impute_weight,
+                    args.model).Model(13, args.hid_size, args.impute_weight,
                                       args.label_weight)
     total_params = sum(p.numel() for p in model.parameters()
                        if p.requires_grad)
@@ -149,14 +149,14 @@ def evaluate_model():
 
 
 def run():
-    # model = getattr(models, args.model).Model(args.hid_size, args.impute_weight, args.label_weight)
+    # model = getattr(models, args.model).Model(13, args.hid_size, args.impute_weight, args.label_weight)
     # total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     # print('Total params is {}'.format(total_params))
     #
     # if torch.cuda.is_available():
     #     model = model.cuda()
     #
-    # patience = 2
+    # patience = 15
     # early_stopping = EarlyStopping(savepath='./result/imputation_model.pt',patience=patience, verbose=True)
     #
     # train(model, early_stopping)

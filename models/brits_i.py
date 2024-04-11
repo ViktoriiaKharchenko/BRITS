@@ -20,9 +20,10 @@ SEQ_LEN = 36
 
 
 class Model(nn.Module):
-    def __init__(self, rnn_hid_size, impute_weight, label_weight):
+    def __init__(self, input_size, rnn_hid_size, impute_weight, label_weight):
         super(Model, self).__init__()
 
+        self.input_size = input_size  # New: specify input size as a parameter
         self.rnn_hid_size = rnn_hid_size
         self.impute_weight = impute_weight
         self.label_weight = label_weight
@@ -30,8 +31,8 @@ class Model(nn.Module):
         self.build()
 
     def build(self):
-        self.rits_f = rits_i.Model(self.rnn_hid_size, self.impute_weight, self.label_weight)
-        self.rits_b = rits_i.Model(self.rnn_hid_size, self.impute_weight, self.label_weight)
+        self.rits_f = rits_i.Model(self.input_size, self.rnn_hid_size, self.impute_weight, self.label_weight)
+        self.rits_b = rits_i.Model(self.input_size, self.rnn_hid_size, self.impute_weight, self.label_weight)
 
     def forward(self, data):
         ret_f = self.rits_f(data, 'forward')

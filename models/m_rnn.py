@@ -90,9 +90,10 @@ class TemporalDecay(nn.Module):
         return gamma
 
 class Model(nn.Module):
-    def __init__(self, rnn_hid_size, impute_weight, label_weight):
+    def __init__(self, input_size, rnn_hid_size, impute_weight, label_weight):
         super(Model, self).__init__()
 
+        self.input_size = input_size
         self.rnn_hid_size = rnn_hid_size
         self.impute_weight = impute_weight
         self.label_weight = label_weight
@@ -100,16 +101,16 @@ class Model(nn.Module):
         self.build()
 
     def build(self):
-        self.rnn_cell = nn.LSTMCell(35 * 3, self.rnn_hid_size)
-        self.pred_rnn = nn.LSTM(35, self.rnn_hid_size, batch_first = True)
+        self.rnn_cell = nn.LSTMCell(self.input_size * 3, self.rnn_hid_size)
+        self.pred_rnn = nn.LSTM(self.input_size, self.rnn_hid_size, batch_first = True)
 
-        self.temp_decay_h = TemporalDecay(input_size = 35, output_size = self.rnn_hid_size, diag = False)
-        self.temp_decay_x = TemporalDecay(input_size = 35, output_size = 35, diag = True)
+        self.temp_decay_h = TemporalDecay(input_size = self.input_size, output_size = self.rnn_hid_size, diag = False)
+        self.temp_decay_x = TemporalDecay(input_size = self.input_size, output_size = self.input_size, diag = True)
 
-        self.hist_reg = nn.Linear(self.rnn_hid_size * 2, 35)
-        self.feat_reg = FeatureRegression(35)
+        self.hist_reg = nn.Linear(self.rnn_hid_size * 2, self.input_size)
+        self.feat_reg = FeatureRegression(self.input_size)
 
-        self.weight_combine = nn.Linear(35 * 2, 35)
+        self.weight_combine = nn.Linear(self.input_size * 2, self.input_size)
 
         self.dropout = nn.Dropout(p = 0.25)
         self.out = nn.Linear(self.rnn_hid_size, 1)

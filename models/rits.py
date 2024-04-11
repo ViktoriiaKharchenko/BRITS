@@ -90,9 +90,10 @@ class TemporalDecay(nn.Module):
         return gamma
 
 class Model(nn.Module):
-    def __init__(self, rnn_hid_size, impute_weight, label_weight):
+    def __init__(self, input_size, rnn_hid_size, impute_weight, label_weight):
         super(Model, self).__init__()
 
+        self.input_size = input_size  # New: specify input size as a parameter
         self.rnn_hid_size = rnn_hid_size
         self.impute_weight = impute_weight
         self.label_weight = label_weight
@@ -100,15 +101,15 @@ class Model(nn.Module):
         self.build()
 
     def build(self):
-        self.rnn_cell = nn.LSTMCell(35 * 2, self.rnn_hid_size)
+        self.rnn_cell = nn.LSTMCell(self.input_size * 2, self.rnn_hid_size)
 
-        self.temp_decay_h = TemporalDecay(input_size = 35, output_size = self.rnn_hid_size, diag = False)
-        self.temp_decay_x = TemporalDecay(input_size = 35, output_size = 35, diag = True)
+        self.temp_decay_h = TemporalDecay(input_size = self.input_size, output_size = self.rnn_hid_size, diag = False)
+        self.temp_decay_x = TemporalDecay(input_size = self.input_size, output_size = self.input_size, diag = True)
 
-        self.hist_reg = nn.Linear(self.rnn_hid_size, 35)
-        self.feat_reg = FeatureRegression(35)
+        self.hist_reg = nn.Linear(self.rnn_hid_size, self.input_size)
+        self.feat_reg = FeatureRegression(self.input_size)
 
-        self.weight_combine = nn.Linear(35 * 2, 35)
+        self.weight_combine = nn.Linear(self.input_size * 2, self.input_size)
 
         self.dropout = nn.Dropout(p = 0.25)
         self.out = nn.Linear(self.rnn_hid_size, 1)
@@ -118,12 +119,15 @@ class Model(nn.Module):
         values = data[direct]['values']
         masks = data[direct]['masks']
         deltas = data[direct]['deltas']
+        lengths = data[direct]['lengths']
 
         evals = data[direct]['evals']
         eval_masks = data[direct]['eval_masks']
 
         labels = data['labels'].view(-1, 1)
         is_train = data['is_train'].view(-1, 1)
+
+        max_length = values.size(1)
 
         h = Variable(torch.zeros((values.size()[0], self.rnn_hid_size)))
         c = Variable(torch.zeros((values.size()[0], self.rnn_hid_size)))
@@ -136,7 +140,7 @@ class Model(nn.Module):
 
         imputations = []
 
-        for t in range(SEQ_LEN):
+        for t in range(max_length):
             x = values[:, t, :]
             m = masks[:, t, :]
             d = deltas[:, t, :]

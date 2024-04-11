@@ -10,8 +10,8 @@ import json
 data_path = 'D:/mimic_imputation/dacmi_challenge_code_and_data/data/train_with_missing'
 ground_truth_path = 'D:/mimic_imputation/dacmi_challenge_code_and_data/data/train_groundtruth'
 
-test_data = 'D:/mimic_imputation/dacmi_challenge_code_and_data/data/test_with_missing'
-test_truth_path = 'D:/mimic_imputation/dacmi_challenge_code_and_data/data/test_groundtruth'
+test_data = 'D:/mimic_imputation/dacmi_challenge_code_and_data/data/test/test_with_missing'
+test_truth_path = 'D:/mimic_imputation/dacmi_challenge_code_and_data/data/test/test_groundtruth'
 
 patient_ids = []
 

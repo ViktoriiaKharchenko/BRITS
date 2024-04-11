@@ -4,7 +4,7 @@ import time
 import ujson as json
 import numpy as np
 import pandas as pd
-
+from torch.nn.utils.rnn import pad_sequence
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
@@ -34,7 +34,7 @@ class MySet(Dataset):
 class MyTrainSet(Dataset):
     def __init__(self):
         super(MyTrainSet, self).__init__()
-        self.content = open('./json/train.json').readlines()
+        self.content = open('./json/DACMI_train.json').readlines()
 
         indices = np.arange(len(self.content))
 
@@ -57,7 +57,7 @@ class MyTrainSet(Dataset):
 class MyTestSet(Dataset):
     def __init__(self):
         super(MyTestSet, self).__init__()
-        self.content = open('./json/test.json').readlines()
+        self.content = open('./json/DACMI_test.json').readlines()
 
     def __len__(self):
         return len(self.content)
@@ -69,25 +69,60 @@ class MyTestSet(Dataset):
 
 
 def collate_fn(recs):
-    forward = list(map(lambda x: x['forward'], recs))
-    backward = list(map(lambda x: x['backward'], recs))
 
-    def to_tensor_dict(recs):
-        values = torch.FloatTensor([r['values'] for r in recs])
-        masks = torch.FloatTensor([r['masks'] for r in recs])
-        deltas = torch.FloatTensor([r['deltas'] for r in recs])
+    forward_values = [torch.FloatTensor(rec['forward']['values']) for rec in recs]
+    forward_masks = [torch.FloatTensor(rec['forward']['masks']) for rec in recs]
+    forward_deltas = [torch.FloatTensor(rec['forward']['deltas']) for rec in recs]
+    forward_evals = [torch.FloatTensor(rec['forward']['evals']) for rec in recs]
+    forward_eval_masks = [torch.FloatTensor(rec['forward']['eval_masks']) for rec in recs]
+    forward_forwards = [torch.FloatTensor(rec['forward']['forwards']) for rec in recs]
 
-        evals = torch.FloatTensor([r['evals'] for r in recs])
-        eval_masks = torch.FloatTensor([r['eval_masks'] for r in recs])
-        forwards = torch.FloatTensor([r['forwards'] for r in recs])
+    backward_values = [torch.FloatTensor(rec['backward']['values']) for rec in recs]
+    backward_masks = [torch.FloatTensor(rec['backward']['masks']) for rec in recs]
+    backward_deltas = [torch.FloatTensor(rec['backward']['deltas']) for rec in recs]
+    backward_evals = [torch.FloatTensor(rec['backward']['evals']) for rec in recs]
+    backward_eval_masks = [torch.FloatTensor(rec['backward']['eval_masks']) for rec in recs]
+    backward_forwards = [torch.FloatTensor(rec['backward']['forwards']) for rec in recs]
 
+    forward_lengths = torch.tensor([len(x) for x in forward_values], dtype=torch.long)
+    backward_lengths = torch.tensor([len(x) for x in backward_values], dtype=torch.long)
 
-        return {'values': values, 'forwards': forwards, 'masks': masks, 'deltas': deltas, 'evals': evals, 'eval_masks': eval_masks}
+    # Pad sequences
+    padded_forward_values = pad_sequence(forward_values, batch_first=True)
+    padded_forward_masks = pad_sequence(forward_masks, batch_first=True)
+    padded_forward_deltas = pad_sequence(forward_deltas, batch_first=True)
+    padded_forward_evals = pad_sequence(forward_evals, batch_first=True)
+    padded_forward_eval_masks = pad_sequence(forward_eval_masks, batch_first=True)
+    padded_forward_forwards = pad_sequence(forward_forwards, batch_first=True)
 
-    ret_dict = {'forward': to_tensor_dict(forward), 'backward': to_tensor_dict(backward)}
+    # Pad sequences
+    padded_backward_values = pad_sequence(backward_values, batch_first=True)
+    padded_backward_masks = pad_sequence(backward_masks, batch_first=True)
+    padded_backward_deltas = pad_sequence(backward_deltas, batch_first=True)
+    padded_backward_evals = pad_sequence(backward_evals, batch_first=True)
+    padded_backward_eval_masks = pad_sequence(backward_eval_masks, batch_first=True)
+    padded_backward_forwards = pad_sequence(backward_forwards, batch_first=True)
 
-    ret_dict['labels'] = torch.FloatTensor(list(map(lambda x: x['label'], recs)))
-    ret_dict['is_train'] = torch.FloatTensor(list(map(lambda x: x['is_train'], recs)))
+    ret_dict = {'forward': {
+        'values': padded_forward_values,
+        'masks': padded_forward_masks,
+        'deltas': padded_forward_deltas,
+        'evals': padded_forward_evals,
+        'eval_masks': padded_forward_eval_masks,
+        'forwards': padded_forward_forwards,
+        'lengths': forward_lengths,  # Include original lengths of sequences
+
+    }, 'backward': {
+        'values': padded_backward_values,
+        'masks': padded_backward_masks,
+        'deltas': padded_backward_deltas,
+        'evals': padded_backward_evals,
+        'eval_masks': padded_backward_eval_masks,
+        'forwards': padded_backward_forwards,
+        'lengths': backward_lengths,
+
+    }, 'is_train': torch.FloatTensor(list(map(lambda x: x['is_train'], recs))),
+        'labels': torch.FloatTensor(list(map(lambda x: x['label'], recs)))}
 
     return ret_dict
 
