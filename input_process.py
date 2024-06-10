@@ -4,13 +4,13 @@ import os
 import re
 import numpy as np
 import pandas as pd
-import ujson as json
+import json
 
 patient_ids = []
 
 for filename in os.listdir('./raw'):
     # the patient data in PhysioNet contains 6-digits
-    match = re.search('\d{6}', filename)
+    match = re.search(r'\d{6}', filename)
     if match:
         id_ = match.group()
         patient_ids.append(id_)
@@ -54,7 +54,7 @@ def parse_data(x):
     values = []
 
     for attr in attributes:
-        if x.has_key(attr):
+        if attr in x:
             values.append(x[attr])
         else:
             values.append(np.nan)
@@ -80,7 +80,7 @@ def parse_rec(values, masks, evals, eval_masks, dir_):
     deltas = parse_delta(masks, dir_)
 
     # only used in GRU-D
-    forwards = pd.DataFrame(values).fillna(method='ffill').fillna(0.0).as_matrix()
+    forwards = pd.DataFrame(values).ffill().fillna(0.0).to_numpy()
 
     rec = {}
 
@@ -94,6 +94,22 @@ def parse_rec(values, masks, evals, eval_masks, dir_):
 
     return rec
 
+class NumpyEncoder(json.JSONEncoder):
+    """ Custom encoder for numpy data types """
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, (np.int_, np.intc, np.intp, np.int8,
+                              np.int16, np.int32, np.int64, np.uint8,
+                              np.uint16, np.uint32, np.uint64)):
+            return int(obj)
+        elif isinstance(obj, (np.float_, np.float16, np.float32,
+                              np.float64)):
+            return float(obj)
+        elif isinstance(obj, (np.bool_)):
+            return bool(obj)
+        # Let the base class default method raise the TypeError
+        return json.JSONEncoder.default(self, obj)
 
 def parse_id(id_):
     data = pd.read_csv('./raw/{}.txt'.format(id_))
@@ -136,7 +152,7 @@ def parse_id(id_):
     rec['forward'] = parse_rec(values, masks, evals, eval_masks, dir_='forward')
     rec['backward'] = parse_rec(values[::-1], masks[::-1], evals[::-1], eval_masks[::-1], dir_='backward')
 
-    rec = json.dumps(rec)
+    rec = json.dumps(rec, cls=NumpyEncoder)  # Use the custom encoder
 
     fs.write(rec + '\n')
 
