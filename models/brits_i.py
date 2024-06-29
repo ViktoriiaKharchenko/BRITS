@@ -12,7 +12,6 @@ import argparse
 import data_loader
 
 from . import rits_i
-from sklearn import metrics
 
 from ipdb import set_trace
 
@@ -20,18 +19,18 @@ SEQ_LEN = 36
 
 
 class Model(nn.Module):
-    def __init__(self, rnn_hid_size, impute_weight, label_weight):
+    def __init__(self, rnn_hid_size, impute_weight):#, label_weight):
         super(Model, self).__init__()
 
         self.rnn_hid_size = rnn_hid_size
         self.impute_weight = impute_weight
-        self.label_weight = label_weight
+        #self.label_weight = label_weight
 
         self.build()
 
     def build(self):
-        self.rits_f = rits_i.Model(self.rnn_hid_size, self.impute_weight, self.label_weight)
-        self.rits_b = rits_i.Model(self.rnn_hid_size, self.impute_weight, self.label_weight)
+        self.rits_f = rits_i.Model(self.rnn_hid_size, self.impute_weight)#, self.label_weight)
+        self.rits_b = rits_i.Model(self.rnn_hid_size, self.impute_weight)#, self.label_weight)
 
     def forward(self, data):
         ret_f = self.rits_f(data, 'forward')
@@ -48,11 +47,11 @@ class Model(nn.Module):
 
         loss = loss_f + loss_b + loss_c
 
-        predictions = (ret_f['predictions'] + ret_b['predictions']) / 2
+        #predictions = (ret_f['predictions'] + ret_b['predictions']) / 2
         imputations = (ret_f['imputations'] + ret_b['imputations']) / 2
 
         ret_f['loss'] = loss
-        ret_f['predictions'] = predictions
+        #ret_f['predictions'] = predictions
         ret_f['imputations'] = imputations
 
         return ret_f
