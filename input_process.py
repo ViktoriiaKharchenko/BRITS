@@ -1,169 +1,236 @@
-# coding: utf-8
-
-import os
-import re
-import numpy as np
 import pandas as pd
+import numpy as np
+from datetime import datetime
 import json
 
-patient_ids = []
-
-for filename in os.listdir('./raw'):
-    # the patient data in PhysioNet contains 6-digits
-    match = re.search(r'\d{6}', filename)
-    if match:
-        id_ = match.group()
-        patient_ids.append(id_)
-
-out = pd.read_csv('./raw/Outcomes-a.txt').set_index('RecordID')['In-hospital_death']
-
-# we select 35 attributes which contains enough non-values
-attributes = ['DiasABP', 'HR', 'Na', 'Lactate', 'NIDiasABP', 'PaO2', 'WBC', 'pH', 'Albumin', 'ALT', 'Glucose', 'SaO2',
-              'Temp', 'AST', 'Bilirubin', 'HCO3', 'BUN', 'RespRate', 'Mg', 'HCT', 'SysABP', 'FiO2', 'K', 'GCS',
-              'Cholesterol', 'NISysABP', 'TroponinT', 'MAP', 'TroponinI', 'PaCO2', 'Platelets', 'Urine', 'NIMAP',
-              'Creatinine', 'ALP']
-
-# mean and std of 35 attributes
-mean = np.array([59.540976152469405, 86.72320413227443, 139.06972964987443, 2.8797765291788986, 58.13833409690321,
-                 147.4835678885565, 12.670222585415166, 7.490957887101613, 2.922874149659863, 394.8899400819931,
-                 141.4867570064675, 96.66380228136883, 37.07362841054398, 505.5576196473552, 2.906465787821709,
-                 23.118951553526724, 27.413004968675743, 19.64795551193981, 2.0277491155660416, 30.692432164676188,
-                 119.60137167841977, 0.5404785381886381, 4.135790642787733, 11.407767149315339, 156.51746031746032,
-                 119.15012244292181, 1.2004983498349853, 80.20321011673151, 7.127188940092161, 40.39875518672199,
-                 191.05877024038804, 116.1171573535279, 77.08923183026529, 1.5052390166989214, 116.77122488658458])
-
-std = np.array(
-    [13.01436781437145, 17.789923096504985, 5.185595006246348, 2.5287518090506755, 15.06074282896952, 85.96290370390257,
-     7.649058756791069, 8.384743923130074, 0.6515057685658769, 1201.033856726966, 67.62249645388543, 3.294112002091972,
-     1.5604879744921516, 1515.362517984297, 5.902070316876287, 4.707600932877377, 23.403743427107095, 5.50914416318306,
-     0.4220051299992514, 5.002058959758486, 23.730556355204214, 0.18634432509312762, 0.706337033602292,
-     3.967579823394297, 45.99491531484596, 21.97610723063014, 2.716532297586456, 16.232515568438338, 9.754483687298688,
-     9.062327978713556, 106.50939503021543, 170.65318497610315, 14.856134327604906, 1.6369529387005546,
-     133.96778334724377])
-
-fs = open('./json/json', 'w')
-
-def to_time_bin(x):
-    h, m = map(int, x.split(':'))
-    return h
-
-
-def parse_data(x):
-    x = x.set_index('Parameter').to_dict()['Value']
-
-    values = []
-
-    for attr in attributes:
-        if attr in x:
-            values.append(x[attr])
-        else:
-            values.append(np.nan)
-    return values
-
-
-def parse_delta(masks, dir_):
-    if dir_ == 'backward':
-        masks = masks[::-1]
-
-    deltas = []
-
-    for h in range(48):
-        if h == 0:
-            deltas.append(np.ones(35))
-        else:
-            deltas.append(np.ones(35) + (1 - masks[h]) * deltas[-1])
-
-    return np.array(deltas)
-
-
-def parse_rec(values, masks, evals, eval_masks, dir_):
-    deltas = parse_delta(masks, dir_)
-
-    # only used in GRU-D
-    forwards = pd.DataFrame(values).ffill().fillna(0.0).to_numpy()
-
-    rec = {}
-
-    rec['values'] = np.nan_to_num(values).tolist()
-    rec['masks'] = masks.astype('int32').tolist()
-    # imputation ground-truth
-    rec['evals'] = np.nan_to_num(evals).tolist()
-    rec['eval_masks'] = eval_masks.astype('int32').tolist()
-    rec['forwards'] = forwards.tolist()
-    rec['deltas'] = deltas.tolist()
-
-    return rec
-
-class NumpyEncoder(json.JSONEncoder):
-    """ Custom encoder for numpy data types """
+class NpEncoder(json.JSONEncoder):
     def default(self, obj):
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif isinstance(obj, (np.int_, np.intc, np.intp, np.int8,
-                              np.int16, np.int32, np.int64, np.uint8,
-                              np.uint16, np.uint32, np.uint64)):
+        if isinstance(obj, np.integer):
             return int(obj)
-        elif isinstance(obj, (np.float_, np.float16, np.float32,
-                              np.float64)):
+        elif isinstance(obj, np.floating):
             return float(obj)
-        elif isinstance(obj, (np.bool_)):
-            return bool(obj)
-        # Let the base class default method raise the TypeError
-        return json.JSONEncoder.default(self, obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return super(NpEncoder, self).default(obj)
 
-def parse_id(id_):
-    data = pd.read_csv('./raw/{}.txt'.format(id_))
-    # accumulate the records within one hour
-    data['Time'] = data['Time'].apply(lambda x: to_time_bin(x))
 
-    evals = []
+pm25_ground = pd.read_csv('./air_quality/pm25_ground.txt')
+pm25_missing = pd.read_csv('./air_quality/pm25_missing.txt')
 
-    # merge all the metrics within one hour
-    for h in range(48):
-        evals.append(parse_data(data[data['Time'] == h]))
+# Ensure datetime is in datetime format
+pm25_ground['datetime'] = pd.to_datetime(pm25_ground['datetime'])
+pm25_missing['datetime'] = pd.to_datetime(pm25_missing['datetime'])
 
-    evals = (np.array(evals) - mean) / std
+# Get the number of entries
+num_entries = pm25_ground.shape[0]
 
-    shp = evals.shape
+total_values = pm25_ground.size
 
-    evals = evals.reshape(-1)
+# Get the number of missing values
+num_missing_values = pm25_ground.isnull().sum().sum()
 
-    # randomly eliminate 10% values as the imputation ground-truth
-    indices = np.where(~np.isnan(evals))[0].tolist()
-    indices = np.random.choice(indices, len(indices) // 10)
+percentage_missing = (num_missing_values / total_values) * 100
 
-    values = evals.copy()
-    values[indices] = np.nan
+print(f"Number of entries: {num_entries}")
+print(f"Number of missing values: {num_missing_values}")
+print(f"Percentage of missing values: {percentage_missing}")
 
+# Get the number of entries
+num_entries = pm25_missing.shape[0]
+
+total_values = pm25_missing.size
+
+# Get the number of missing values
+num_missing_values = pm25_missing.isnull().sum().sum()
+
+percentage_missing = (num_missing_values / total_values) * 100
+
+print(f"Number of entries: {num_entries}")
+print(f"Number of missing values: {num_missing_values}")
+print(f"Percentage of missing values: {percentage_missing}")
+
+# Create a copy of the missing data to maintain original nulls
+combined_data = pm25_missing.copy()
+
+# Add ground truth columns to the combined data
+for col in pm25_missing.columns[1:]:
+    combined_data[f'{col}_ground'] = pm25_ground[col]
+
+# Ensure datetime column is in datetime format in combined_data
+combined_data['datetime'] = pd.to_datetime(combined_data['datetime'])
+
+# Split the data into training and testing sets
+def split_train_test(data):
+    data['month'] = data['datetime'].dt.month
+    test_data = data[data['month'].isin([3, 6, 9, 12])]
+    train_data = data[~data['month'].isin([3, 6, 9, 12])]
+    return train_data.drop(columns=['month']), test_data.drop(columns=['month'])
+
+train_data, test_data = split_train_test(combined_data)
+
+# Get the number of entries
+num_entries = train_data.shape[0]
+
+total_values = train_data.size
+
+# Get the number of missing values
+num_missing_values = train_data.isnull().sum().sum()
+
+percentage_missing = (num_missing_values / total_values) * 100
+
+print(f"Number of entries: {num_entries}")
+print(f"Number of missing values: {num_missing_values}")
+print(f"Percentage of missing values: {percentage_missing}")
+
+# Get the number of entries
+num_entries = test_data.shape[0]
+
+total_values = test_data.size
+
+# Get the number of missing values
+num_missing_values = test_data.isnull().sum().sum()
+
+percentage_missing = (num_missing_values / total_values) * 100
+
+print(f"Number of entries: {num_entries}")
+print(f"Number of missing values: {num_missing_values}")
+print(f"Percentage of missing values: {percentage_missing}")
+
+# Generate random time series samples of 36 consecutive steps for the training set
+def random_select_time_series(data, sequence_length=36, num_samples=1000):
+    time_series_data = []
+    ground_truth_data = []
+    max_start_index = len(data) - sequence_length
+    random_indices = np.random.randint(0, max_start_index + 1, num_samples)
+    for start in random_indices:
+        end = start + sequence_length
+        time_series_data.append(data.iloc[start:end, 1:37].values)
+        ground_truth_data.append(data.iloc[start:end, 37:].values)
+    return np.array(time_series_data), np.array(ground_truth_data)
+
+def sequential_select_time_series2(data, sequence_length=36):
+    time_series_data = []
+    ground_truth_data = []
+    for start in range(0, len(data) - sequence_length + 1, 2):
+        end = start + sequence_length
+        time_series_data.append(data.iloc[start:end, 1:37].values)
+        ground_truth_data.append(data.iloc[start:end, 37:].values)
+    return np.array(time_series_data), np.array(ground_truth_data)
+
+# Create non-random time series samples of 36 consecutive steps for the test set
+def sequential_select_time_series(data, sequence_length=36):
+    time_series_data = []
+    ground_truth_data = []
+    for start in range(0, len(data) - sequence_length + 1):
+        end = start + sequence_length
+        time_series_data.append(data.iloc[start:end, 1:37].values)
+        ground_truth_data.append(data.iloc[start:end, 37:].values)
+    return np.array(time_series_data), np.array(ground_truth_data)
+
+# Define number of samples you want to select
+num_samples = 6000
+
+# Generate the time series from the training data
+train_series, train_ground_truth = random_select_time_series(train_data, num_samples=num_samples)
+
+# Generate the time series from the test data
+test_series, test_ground_truth = sequential_select_time_series(test_data)
+
+# Display the shapes of the resulting datasets
+print(train_series.shape, train_ground_truth.shape, test_series.shape, test_ground_truth.shape,
+ train_data.shape, test_data.shape)
+
+# Filter out invalid time series
+def filter_valid_time_series(series_data, ground_truth_data):
+    valid_indices = []
+    for i in range(series_data.shape[0]):
+        series = series_data[i]
+        if not np.isnan(series).all(axis=1).any() and not np.isnan(series).all(axis=0).any():
+            valid_indices.append(i)
+    return series_data[valid_indices], ground_truth_data[valid_indices]
+
+
+# Filter training and test data
+train_series_filtered, train_ground_truth_filtered = filter_valid_time_series(train_series, train_ground_truth)
+test_series_filtered, test_ground_truth_filtered = filter_valid_time_series(test_series, test_ground_truth)
+
+# Display the shapes of the resulting datasets
+print(train_series_filtered.shape, train_ground_truth_filtered.shape, test_series_filtered.shape, test_ground_truth_filtered.shape)
+
+
+# Normalize features
+
+# Normalize features ignoring NaNs
+def normalize_data(train_data, test_data, ground_truth_train, ground_truth_test):
+    mean = np.nanmean(train_data, axis=0)
+    std = np.nanstd(train_data, axis=0)
+    train_data = (train_data - mean) / std
+    test_data = (test_data - mean) / std
+    ground_truth_train = (ground_truth_train - mean) / std
+    ground_truth_test = (ground_truth_test - mean) / std
+    return train_data, test_data, ground_truth_train, ground_truth_test, mean, std
+
+
+train_series_normalized, test_series_normalized, train_ground_truth_normalized, test_ground_truth_normalized, mean, std = normalize_data(train_series_filtered, test_series_filtered, train_ground_truth_filtered, test_ground_truth_filtered)
+
+
+# Function to generate masks and deltas
+def generate_masks_and_deltas(values):
     masks = ~np.isnan(values)
-    eval_masks = (~np.isnan(values)) ^ (~np.isnan(evals))
-
-    evals = evals.reshape(shp)
-    values = values.reshape(shp)
-
-    masks = masks.reshape(shp)
-    eval_masks = eval_masks.reshape(shp)
-
-    label = out.loc[int(id_)]
-
-    rec = {'label': label}
-
-    # prepare the model for both directions
-    rec['forward'] = parse_rec(values, masks, evals, eval_masks, dir_='forward')
-    rec['backward'] = parse_rec(values[::-1], masks[::-1], evals[::-1], eval_masks[::-1], dir_='backward')
-
-    rec = json.dumps(rec, cls=NumpyEncoder)  # Use the custom encoder
-
-    fs.write(rec + '\n')
+    deltas = np.zeros_like(values)
+    deltas[0] = 1
+    for t in range(1, values.shape[0]):
+        deltas[t] = 1 + (1 - masks[t]) * deltas[t - 1]
+    return masks, deltas
 
 
-for id_ in patient_ids:
-    print('Processing patient {}'.format(id_))
-    try:
-        parse_id(id_)
-    except Exception as e:
-        print(e)
-        continue
+# Function to process a time series record
+def process_record(values, ground_truth):
+    masks, deltas = generate_masks_and_deltas(values)
+    eval_masks = masks ^ ~np.isnan(ground_truth)
 
-fs.close()
+    forwards = pd.DataFrame(values).ffill().fillna(0.0).to_numpy()
+    record = {
+        'values': np.nan_to_num(values).tolist(),
+        'masks': masks.astype('int32').tolist(),
+        'evals': np.nan_to_num(ground_truth).tolist(),
+        'eval_masks': eval_masks.astype('int32').tolist(),
+        'forwards': forwards.tolist(),
+        'deltas': deltas.tolist()
+    }
+    return record
 
+
+# Process all training records
+train_records = []
+for i in range(train_series_normalized.shape[0]):
+    values = train_series_normalized[i]
+    ground_truth = train_ground_truth_normalized[i]
+    record = {
+        'forward': process_record(values, ground_truth),
+        'backward': process_record(values[::-1], ground_truth[::-1]),
+        'is_train': 1  # Indicates that this record is from the training set
+
+    }
+    train_records.append(record)
+
+# Process all test records
+test_records = []
+for i in range(test_series_normalized.shape[0]):
+    values = test_series_normalized[i]
+    ground_truth = test_ground_truth_normalized[i]
+    record = {
+        'forward': process_record(values, ground_truth),
+        'backward': process_record(values[::-1], ground_truth[::-1]),
+        'is_train': 0  # Indicates that this record is from the test set
+
+    }
+    test_records.append(record)
+
+# Save to JSON files
+with open('train.json', 'w') as f:
+    json.dump(train_records, f, cls=NpEncoder)
+
+with open('test.json', 'w') as f:
+    json.dump(test_records, f, cls=NpEncoder)
