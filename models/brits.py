@@ -15,8 +15,8 @@ from . import rits
 
 from ipdb import set_trace
 
-SEQ_LEN = 36
-RNN_HID_SIZE = 64
+SEQ_LEN = 15
+RNN_HID_SIZE = 32
 
 
 class Model(nn.Module):

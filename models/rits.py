@@ -13,8 +13,8 @@ import data_loader
 
 from ipdb import set_trace
 
-SEQ_LEN = 36
-FEATURE_SIZE = 36
+SEQ_LEN = 15
+FEATURE_SIZE = 29
 
 def binary_cross_entropy_with_logits(input, target, weight=None, size_average=True, reduce=True):
     #if not (target.size() == input.size()):

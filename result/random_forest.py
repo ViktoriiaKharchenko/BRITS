@@ -1,7 +1,7 @@
 import xgboost as xgb
 import numpy as np
 
-model_name = 'brits_i'
+model_name = 'brits'
 
 impute = np.load('./{}_data.npy'.format(model_name)).reshape(-1, 48 * 35)
 label = np.load('./{}_label.npy'.format(model_name))
@@ -15,6 +15,8 @@ print(label.shape)
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score
+
+label = label.ravel()
 
 auc = []
 

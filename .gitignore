@@ -1,3 +1,5 @@
 *.py[cod]
 raw
 result/*.npy
+*.idea
+json/*.json

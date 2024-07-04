@@ -15,7 +15,7 @@ from . import rits_i
 
 from ipdb import set_trace
 
-SEQ_LEN = 36
+SEQ_LEN = 15
 
 
 class Model(nn.Module):
