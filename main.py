@@ -55,6 +55,8 @@ def train(model):
 
         evaluate(model, test_iter)
 
+    torch.save(model.state_dict(), './result/{}_model.pth'.format(args.model))
+
 
 def evaluate(model, val_iter):
     model.eval()
@@ -109,7 +111,7 @@ def evaluate(model, val_iter):
     save_impute = np.concatenate(save_impute, axis=0)
     #save_label = np.concatenate(save_label, axis=0)
 
-    np.save('./result/{}_data'.format(args.model), save_impute)
+    #np.save('./result/{}_data'.format(args.model), save_impute)
     #np.save('./result/{}_label'.format(args.model), save_label)
 
 

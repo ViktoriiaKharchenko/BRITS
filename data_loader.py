@@ -29,14 +29,19 @@ from torch.utils.data import Dataset, DataLoader
 
 
 class MySet(Dataset):
-    def __init__(self, filename):
+    def __init__(self, filename=None, content=None):
         super(MySet, self).__init__()
-        self.content = open(filename).readlines()
+        if filename:
+            self.content = open(filename).readlines()
+        elif content:
+            self.content = content
+        else:
+            raise ValueError("Either filename or content must be provided")
 
-        indices = np.arange(len(self.content))
-        val_indices = np.random.choice(indices, len(self.content) // 5)
-
-        self.val_indices = set(val_indices.tolist())
+        # indices = np.arange(len(self.content))
+        # val_indices = np.random.choice(indices, len(self.content) // 5)
+        #
+        # self.val_indices = set(val_indices.tolist())
 
     def __len__(self):
         return len(self.content)
@@ -102,3 +107,20 @@ def get_test(batch_size=64, shuffle=False):
                            )
 
     return test_iter
+
+
+def get_combined_dataset(batch_size=64, shuffle=False):
+    train_set = MySet('./json/train.json')
+    test_set = MySet('./json/test.json')
+    combined_content = train_set.content + test_set.content
+    combined_set = MySet(content=combined_content)
+
+    combined_iter = DataLoader(dataset=combined_set, \
+                               batch_size=batch_size, \
+                               num_workers=4, \
+                               shuffle=shuffle, \
+                               pin_memory=True, \
+                               collate_fn=collate_fn
+                               )
+
+    return combined_iter

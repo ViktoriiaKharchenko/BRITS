@@ -59,6 +59,9 @@ assert train_indices.isdisjoint(test_indices), "Train and test sets overlap!"
 train_missing_percentage = train_data['DURATION_MINUTES_3_missing'].mean() * 100
 test_missing_percentage = test_data['DURATION_MINUTES_3_missing'].mean() * 100
 
+print(train_data.shape[0])
+print(test_data.shape[0])
+
 print(f"Percentage of missing values in DURATION_MINUTES_3 in training set: {train_missing_percentage:.2f}%")
 print(f"Percentage of missing values in DURATION_MINUTES_3 in testing set: {test_missing_percentage:.2f}%")
 
@@ -71,6 +74,9 @@ train_data2 = train_data.sort_values(by='CREATED_DATE_hours')
 test_data2 = test_data.sort_values(by='CREATED_DATE_hours')
 
 print(train_data2)
+
+first_29_columns = train_data2.columns[:29]
+print(first_29_columns)
 # Create non-random time series samples of 36 consecutive steps for the test set
 def sequential_select_time_series(data, sequence_length=15):
     time_series_data = []
