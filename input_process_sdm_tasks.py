@@ -16,8 +16,8 @@ class NpEncoder(json.JSONEncoder):
             return super(NpEncoder, self).default(obj)
 
 
-df_ground = pd.read_csv('./sdm_tasks/sdm_tasks_ground_truth.txt')
-df_missing = pd.read_csv('./sdm_tasks/sdm_tasks_missing.txt')
+df_ground = pd.read_csv('./sdm_tasks/sdm_tasks_ground_truth_less_features.txt')
+df_missing = pd.read_csv('./sdm_tasks/sdm_tasks_missing_less_features.txt')
 
 # Calculate the percentage of rows with missing values for each file
 missing_values_percentage_ground = (df_ground.isnull().any(axis=1).sum() / len(df_ground)) * 100
@@ -33,17 +33,19 @@ combined_data = df_missing.copy()
 combined_data['DURATION_MINUTES_3_missing'] = combined_data['DURATION_MINUTES_3'].isnull().astype(int)
 
 # Add ground truth columns for only the columns that can contain missing values
-combined_data['STARTED_DATE_hours_ground'] = df_ground['STARTED_DATE_hours']
+#combined_data['STARTED_DATE_hours_ground'] = df_ground['STARTED_DATE_hours']
 combined_data['DURATION_MINUTES_3_ground'] = df_ground['DURATION_MINUTES_3']
 
 # Remove rows where the ground truth columns have NaN values
-combined_data.dropna(subset=['STARTED_DATE_hours_ground', 'DURATION_MINUTES_3_ground'], inplace=True)
+#combined_data.dropna(subset=['STARTED_DATE_hours_ground', 'DURATION_MINUTES_3_ground'], inplace=True)
+
+combined_data.dropna(subset=['DURATION_MINUTES_3_ground'], inplace=True)
 
 # Remove the `DURATION_MINUTES_3_missing` and `MISSING_FLAG` columns
 combined_data = combined_data.drop(columns=['MISSING_FLAG'])
 
 # Sort the combined data based on CREATED_DATE_hours
-combined_data_sorted = combined_data.sort_values(by='CREATED_DATE_hours')
+combined_data_sorted = combined_data.sort_values(by='APPLICATION_TASK_ID')
 
 print(combined_data_sorted)
 
@@ -70,8 +72,8 @@ train_data = train_data.drop(columns=['DURATION_MINUTES_3_missing'])
 test_data = test_data.drop(columns=['DURATION_MINUTES_3_missing'])
 
 # Sort the combined data based on CREATED_DATE_hours
-train_data2 = train_data.sort_values(by='CREATED_DATE_hours')
-test_data2 = test_data.sort_values(by='CREATED_DATE_hours')
+train_data2 = train_data.sort_values(by='APPLICATION_TASK_ID')
+test_data2 = test_data.sort_values(by='APPLICATION_TASK_ID')
 
 print(train_data2)
 
@@ -84,11 +86,11 @@ def sequential_select_time_series(data, sequence_length=15):
     for start in range(0, len(data) - sequence_length + 1):
         end = start + sequence_length
         # Select the series data
-        time_series = data.iloc[start:end, :29].values
+        time_series = data.iloc[start:end, :21].values
 
         # Select the ground truth data
-        ground_truth = data.iloc[start:end, :29].copy()
-        ground_truth.loc[:, 'STARTED_DATE_hours'] = data.iloc[start:end]['STARTED_DATE_hours_ground'].values
+        ground_truth = data.iloc[start:end, :21].copy()
+        #ground_truth.loc[:, 'STARTED_DATE_hours'] = data.iloc[start:end]['STARTED_DATE_hours_ground'].values
         ground_truth.loc[:, 'DURATION_MINUTES_3'] = data.iloc[start:end]['DURATION_MINUTES_3_ground'].values
 
         time_series_data.append(time_series)
@@ -100,7 +102,9 @@ def sequential_select_time_series(data, sequence_length=15):
 train_series, train_series_ground_truth = sequential_select_time_series(train_data2)
 test_series, test_series_ground_truth = sequential_select_time_series(test_data2)
 
-np.save('val_series_ground_truth.npy', test_series_ground_truth)
+np.save('val_series_ground_truth2.npy', test_series_ground_truth)
+np.save('train_series_ground_truth2.npy', train_series_ground_truth)
+
 
 print("Train series shape:", train_series.shape)
 print("Test series shape:", test_series.shape)

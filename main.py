@@ -5,6 +5,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 from datetime import datetime
+import matplotlib.pyplot as plt
+
 
 import numpy as np
 
@@ -39,6 +41,8 @@ def train(model):
 
     data_iter = data_loader.get_train(batch_size=args.batch_size)
     test_iter = data_loader.get_test(batch_size=args.batch_size)
+    MAE_arr = []
+    loss_arr = []
 
     for epoch in range(args.epochs):
         model.train()
@@ -53,9 +57,13 @@ def train(model):
 
             print('\r Progress epoch {}, {:.2f}%, average loss {}'.format(epoch, (idx + 1) * 100.0 / len(data_iter), run_loss / (idx + 1.0)))
 
-        evaluate(model, test_iter)
+        MAE, loss = evaluate(model, test_iter)
+        MAE_arr.append(MAE)
+        loss_arr.append(loss)
 
-    torch.save(model.state_dict(), './result/{}_model.pth'.format(args.model))
+    torch.save(model.state_dict(), './result/{}_model_less_features.pth'.format(args.model))
+    return MAE_arr, loss_arr
+
 
 
 def evaluate(model, val_iter):
@@ -69,10 +77,13 @@ def evaluate(model, val_iter):
 
     save_impute = []
     #save_label = []
+    run_loss = 0.0
+
 
     for idx, data in enumerate(val_iter):
         data = utils.to_var(data)
         ret = model.run_on_batch(data, None)
+        run_loss += ret['loss'].item()
 
         # save the imputation results which is used to test the improvement of traditional methods with imputed values
         save_impute.append(ret['imputations'].data.cpu().numpy())
@@ -104,15 +115,19 @@ def evaluate(model, val_iter):
     evals = np.asarray(evals)
     imputations = np.asarray(imputations)
 
-    print('MAE', np.abs(evals - imputations).mean())
+    MAE = np.abs(evals - imputations).mean()
+    print('MAE', MAE)
 
     print('MRE', np.abs(evals - imputations).sum() / np.abs(evals).sum())
 
     save_impute = np.concatenate(save_impute, axis=0)
     #save_label = np.concatenate(save_label, axis=0)
 
-    #np.save('./result/{}_data'.format(args.model), save_impute)
+    np.save('./result/{}_data_less_features'.format(args.model), save_impute)
     #np.save('./result/{}_label'.format(args.model), save_label)
+
+    return MAE, run_loss
+
 
 
 def run():
@@ -123,8 +138,19 @@ def run():
     if torch.cuda.is_available():
         model = model.cuda()
 
-    train(model)
+    MAE, loss = train(model)
 
+    plt.plot(MAE)
+    plt.title("SDM Review and Determination Imputation \nmodel={}\nminimum MAE={}".format(model, np.min(MAE)))
+    plt.xlabel("epochs")
+    plt.ylabel("MAE")
+    plt.show()
+
+    plt.plot(loss)
+    plt.title("SDM Review and Determination Imputation \nmodel={}\nmin loss={}".format(model, np.min(loss)))
+    plt.xlabel("epochs")
+    plt.ylabel("Loss")
+    plt.show()
 
 if __name__ == '__main__':
     run()

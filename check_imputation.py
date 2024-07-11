@@ -10,15 +10,24 @@ mean = np.load('mean.npy')
 std = np.load('std.npy')
 
 # Load the imputed data
-imputed_data_normalized = np.load('./result/brits_data_2.npy')
+imputed_data_normalized = np.load('./result/brits_train_data_imputed.npy')
 print(imputed_data_normalized)
 # Denormalize the imputed data
+
+# Load the imputed data for the entire dataset
+imputed_data_normalized_entire = np.load('./result/brits_entire_data_imputed.npy')
+ground_truth_entire = np.load('./result/brits_ground_truth.npy')
+
 def denormalize_data(normalized_data, mean, std):
     return (normalized_data * std) + mean
 
 imputed_data_denormalized = denormalize_data(imputed_data_normalized, mean, std)
+imputed_data_denormalized_entire = denormalize_data(imputed_data_normalized_entire, mean, std)
 
-val_series_ground_truth = np.load('val_series_ground_truth.npy')
+ground_truth_denormalized_entire = denormalize_data(ground_truth_entire, mean, std)
+
+
+val_series_ground_truth = np.load('train_series_ground_truth.npy')
 
 column_index = 4  # Replace with the actual index of STARTED_DATE_hours in your data
 
@@ -26,6 +35,8 @@ column_index = 4  # Replace with the actual index of STARTED_DATE_hours in your 
 imputed_started_date_hours = imputed_data_denormalized[:, :, column_index].flatten()
 ground_truth_started_date_hours = val_series_ground_truth[:, :, column_index].flatten()
 
+imputed_started_date_hours_entire = imputed_data_denormalized_entire[:, :, column_index].flatten()
+ground_truth_started_date_hours_entire = ground_truth_denormalized_entire[:, :, column_index].flatten()
 
 column_index = -5
 
@@ -34,9 +45,17 @@ imputed_duration_minutes_3 = imputed_data_denormalized[:, :, column_index].flatt
 ground_truth_duration_minutes_3 = val_series_ground_truth[:, :, column_index].flatten()
 
 
+imputed_duration_minutes_3_entire = imputed_data_denormalized_entire[:, :, column_index].flatten()
+ground_truth_duration_minutes_3_entire = ground_truth_denormalized_entire[:, :, column_index].flatten()
+
+
+
 # Compute the residuals
 residuals_started_date_hours = ground_truth_started_date_hours - imputed_started_date_hours
 residuals_duration_minutes_3 = ground_truth_duration_minutes_3 - imputed_duration_minutes_3
+
+residuals_started_date_hours_entire = ground_truth_started_date_hours_entire - imputed_started_date_hours_entire
+residuals_duration_minutes_3_entire = ground_truth_duration_minutes_3_entire - imputed_duration_minutes_3_entire
 
 # Calculate accuracy metrics
 mae_started_date_hours = mean_absolute_error(ground_truth_started_date_hours, imputed_started_date_hours)
@@ -107,3 +126,34 @@ plt.ylabel('Residual')
 
 plt.tight_layout()
 plt.show()
+
+# Calculate accuracy metrics for entire dataset
+mae_started_date_hours_entire = mean_absolute_error(ground_truth_started_date_hours_entire, imputed_started_date_hours_entire)
+mae_duration_minutes_3_entire = mean_absolute_error(ground_truth_duration_minutes_3_entire, imputed_duration_minutes_3_entire)
+
+print(f"\nEntire Dataset Metrics:")
+print(f"  Mean Absolute Error for STARTED_DATE_hours: {mae_started_date_hours_entire}")
+print(f"  Mean Absolute Error for DURATION_MINUTES_3: {mae_duration_minutes_3_entire}")
+
+# Calculate additional metrics for entire dataset
+mse_started_date_hours_entire = mean_squared_error(ground_truth_started_date_hours_entire, imputed_started_date_hours_entire)
+rmse_started_date_hours_entire = np.sqrt(mse_started_date_hours_entire)
+medae_started_date_hours_entire = median_absolute_error(ground_truth_started_date_hours_entire, imputed_started_date_hours_entire)
+r2_started_date_hours_entire = r2_score(ground_truth_started_date_hours_entire, imputed_started_date_hours_entire)
+
+mse_duration_minutes_3_entire = mean_squared_error(ground_truth_duration_minutes_3_entire, imputed_duration_minutes_3_entire)
+rmse_duration_minutes_3_entire = np.sqrt(mse_duration_minutes_3_entire)
+medae_duration_minutes_3_entire = median_absolute_error(ground_truth_duration_minutes_3_entire, imputed_duration_minutes_3_entire)
+r2_duration_minutes_3_entire = r2_score(ground_truth_duration_minutes_3_entire, imputed_duration_minutes_3_entire)
+
+print(f"  Metrics for STARTED_DATE_hours (Entire Dataset):")
+print(f"    Mean Squared Error: {mse_started_date_hours_entire}")
+print(f"    Root Mean Squared Error: {rmse_started_date_hours_entire}")
+print(f"    Median Absolute Error: {medae_started_date_hours_entire}")
+print(f"    R² Score: {r2_started_date_hours_entire}")
+
+print(f"  Metrics for DURATION_MINUTES_3 (Entire Dataset):")
+print(f"    Mean Squared Error: {mse_duration_minutes_3_entire}")
+print(f"    Root Mean Squared Error: {rmse_duration_minutes_3_entire}")
+print(f"    Median Absolute Error: {medae_duration_minutes_3_entire}")
+print(f"    R² Score: {r2_duration_minutes_3_entire}")
