@@ -14,7 +14,7 @@ import data_loader
 from ipdb import set_trace
 
 SEQ_LEN = 15
-FEATURE_SIZE = 29
+FEATURE_SIZE = 21
 
 def binary_cross_entropy_with_logits(input, target, weight=None, size_average=True, reduce=True):
     if not (target.size() == input.size()):
@@ -128,7 +128,7 @@ class Model(nn.Module):
 
         return {'loss': x_loss * self.impute_weight, #+ y_loss * self.label_weight, 'predictions': y_h,\
                 'imputations': imputations, #'labels': labels, 'is_train': is_train,\
-                'evals': evals, 'eval_masks': eval_masks}
+                'evals': evals, 'eval_masks': eval_masks,  'masks': masks}
 
     def run_on_batch(self, data, optimizer, epoch = None):
         ret = self(data, direct = 'forward')
