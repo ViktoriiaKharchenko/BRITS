@@ -71,9 +71,11 @@ def collate_fn(recs):
 
         evals = torch.FloatTensor(list(map(lambda x: x['evals'], recs)))
         eval_masks = torch.FloatTensor(list(map(lambda x: x['eval_masks'], recs)))
+        original_ids = torch.FloatTensor(list(map(lambda x: x['original_ids'], recs)))
+
 
         return {'values': values, 'forwards': forwards, 'masks': masks, 'deltas': deltas, 'evals': evals,
-                'eval_masks': eval_masks}
+                'eval_masks': eval_masks, 'original_ids': original_ids}
 
     ret_dict = {'forward': to_tensor_dict(forward), 'backward': to_tensor_dict(backward)}
 

@@ -1,8 +1,9 @@
-import pandas as pd
 import numpy as np
-from datetime import datetime
-import json
+import pandas as pd
 from sklearn.model_selection import train_test_split
+
+import json
+
 
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -16,8 +17,8 @@ class NpEncoder(json.JSONEncoder):
             return super(NpEncoder, self).default(obj)
 
 
-df_ground = pd.read_csv('./sdm_tasks/sdm_tasks_ground_truth.txt')
-df_missing = pd.read_csv('./sdm_tasks/sdm_tasks_missing.txt')
+df_ground = pd.read_csv('./sdm_tasks/sdm_tasks_ground_truth_less_features_started.txt')
+df_missing = pd.read_csv('./sdm_tasks/sdm_tasks_missing_less_features_started.txt')
 
 # Calculate the percentage of rows with missing values for each file
 missing_values_percentage_ground = (df_ground.isnull().any(axis=1).sum() / len(df_ground)) * 100
@@ -39,13 +40,11 @@ combined_data['DURATION_MINUTES_3_ground'] = df_ground['DURATION_MINUTES_3']
 # Remove rows where the ground truth columns have NaN values
 #combined_data.dropna(subset=['STARTED_DATE_hours_ground', 'DURATION_MINUTES_3_ground'], inplace=True)
 
-#combined_data.dropna(subset=['DURATION_MINUTES_3_ground'], inplace=True)
-
 # Remove the `DURATION_MINUTES_3_missing` and `MISSING_FLAG` columns
 combined_data = combined_data.drop(columns=['MISSING_FLAG'])
 
 # Sort the combined data based on CREATED_DATE_hours
-combined_data_sorted = combined_data.sort_values(by='CREATED_DATE_hours')
+combined_data_sorted = combined_data.sort_values(by='APPLICATION_TASK_ID')
 
 print(combined_data_sorted)
 
@@ -61,9 +60,6 @@ assert train_indices.isdisjoint(test_indices), "Train and test sets overlap!"
 train_missing_percentage = train_data['DURATION_MINUTES_3_missing'].mean() * 100
 test_missing_percentage = test_data['DURATION_MINUTES_3_missing'].mean() * 100
 
-print(train_data.shape[0])
-print(test_data.shape[0])
-
 print(f"Percentage of missing values in DURATION_MINUTES_3 in training set: {train_missing_percentage:.2f}%")
 print(f"Percentage of missing values in DURATION_MINUTES_3 in testing set: {test_missing_percentage:.2f}%")
 
@@ -72,54 +68,47 @@ train_data = train_data.drop(columns=['DURATION_MINUTES_3_missing'])
 test_data = test_data.drop(columns=['DURATION_MINUTES_3_missing'])
 
 # Sort the combined data based on CREATED_DATE_hours
-train_data2 = train_data.sort_values(by='CREATED_DATE_hours')
-test_data2 = test_data.sort_values(by='CREATED_DATE_hours')
+train_data2 = train_data.sort_values(by='APPLICATION_TASK_ID')
+test_data2 = test_data.sort_values(by='APPLICATION_TASK_ID')
 
-test_data2.to_csv('test_data_old.csv', index=False)
+test_data2.to_csv('test_data2.csv', index=False)
 
 print(train_data2)
-
 # Create non-random time series samples of 36 consecutive steps for the test set
 def sequential_select_time_series(data, sequence_length=15):
     time_series_data = []
     ground_truth_data = []
-    average_time_windows = []
+    original_ids = []
 
     for start in range(0, len(data) - sequence_length + 1):
         end = start + sequence_length
         # Select the series data
-        time_series = data.iloc[start:end, :29].values
+        time_series = data.iloc[start:end, :22].values
 
         # Select the ground truth data
-        ground_truth = data.iloc[start:end, :29].copy()
+        ground_truth = data.iloc[start:end, :22].copy()
         ground_truth.loc[:, 'STARTED_DATE_hours'] = data.iloc[start:end]['STARTED_DATE_hours_ground'].values
         ground_truth.loc[:, 'DURATION_MINUTES_3'] = data.iloc[start:end]['DURATION_MINUTES_3_ground'].values
 
         time_series_data.append(time_series)
         ground_truth_data.append(ground_truth.values)
-        time_differences = data['CREATED_DATE_hours'].iloc[start:end].diff().dropna()
-        average_time_window = time_differences.mean()
-        average_time_windows.append(average_time_window)
+        original_ids.append(data.iloc[start:end]['APPLICATION_TASK_ID'].values)
 
-    _avg_time_windows = np.array(average_time_windows)
 
-    print(f"Average time window between tasks in set: {_avg_time_windows.mean()} hours")
-
-    return np.array(time_series_data), np.array(ground_truth_data)
+    return np.array(time_series_data), np.array(ground_truth_data), np.array(original_ids)
 
 # Form sequences from the split data without overlapping
-train_series, train_series_ground_truth = sequential_select_time_series(train_data2)
-test_series, test_series_ground_truth = sequential_select_time_series(test_data2)
+train_series, train_series_ground_truth, train_original_ids = sequential_select_time_series(train_data2)
+test_series, test_series_ground_truth, test_original_ids = sequential_select_time_series(test_data2)
 
-#np.save('val_series_ground_truth_old.npy', test_series_ground_truth)
-#np.save('train_series_ground_truth2.npy', train_series_ground_truth)
-
+np.save('val_series_ground_truth.npy', test_series_ground_truth)
 
 print("Train series shape:", train_series.shape)
 print("Test series shape:", test_series.shape)
 print("Train series ground truth shape:", train_series_ground_truth.shape)
 print("Test series ground truth shape:", test_series_ground_truth.shape)
-
+print("Train original IDs shape:", train_original_ids.shape)
+print("Test original IDs shape:", test_original_ids.shape)
 
 
 # Normalize features
@@ -158,9 +147,10 @@ def generate_masks_and_deltas(values):
 
 
 # Function to process a time series record
-def process_record(values, ground_truth):
+def process_record(values, ground_truth, original_ids):
     masks, deltas = generate_masks_and_deltas(values)
     eval_masks = masks ^ ~np.isnan(ground_truth)
+    #count_mask_true_eval_mask_false = np.sum((masks == True) & (eval_masks == False))
 
     forwards = pd.DataFrame(values).ffill().fillna(0.0).to_numpy()
     record = {
@@ -169,22 +159,29 @@ def process_record(values, ground_truth):
         'evals': np.nan_to_num(ground_truth).tolist(),
         'eval_masks': eval_masks.astype('int32').tolist(),
         'forwards': forwards.tolist(),
-        'deltas': deltas.tolist()
+        'deltas': deltas.tolist(),
+        'original_ids': original_ids.tolist()  # Add original IDs
+        #'count_mask_true_eval_mask_false': int(count_mask_true_eval_mask_false)
+
     }
     return record
 
+#total_count_mask_true_eval_mask_false = 0
 
 #Process all training records
 train_records = []
 for i in range(train_series_normalized.shape[0]):
     values = train_series_normalized[i]
     ground_truth = train_ground_truth_normalized[i]
+    original_ids = train_original_ids[i]
+
     record = {
-        'forward': process_record(values, ground_truth),
-        'backward': process_record(values[::-1], ground_truth[::-1]),
+        'forward': process_record(values, ground_truth, original_ids),
+        'backward': process_record(values[::-1], ground_truth[::-1], original_ids),
         'is_train': 1  # Indicates that this record is from the training set
 
     }
+    #total_count_mask_true_eval_mask_false += record['forward']['count_mask_true_eval_mask_false']
     train_records.append(record)
 
 # Process all test records
@@ -192,13 +189,19 @@ test_records = []
 for i in range(test_series_normalized.shape[0]):
     values = test_series_normalized[i]
     ground_truth = test_ground_truth_normalized[i]
+    original_ids = test_original_ids[i]
+
     record = {
-        'forward': process_record(values, ground_truth),
-        'backward': process_record(values[::-1], ground_truth[::-1]),
+        'forward': process_record(values, ground_truth, original_ids),
+        'backward': process_record(values[::-1], ground_truth[::-1], original_ids),
         'is_train': 0  # Indicates that this record is from the test set
 
     }
+    #total_count_mask_true_eval_mask_false += record['forward']['count_mask_true_eval_mask_false']
     test_records.append(record)
+
+#print(f"Total number of records with masks True and eval_masks False: {total_count_mask_true_eval_mask_false}")
+
 
 # Save to JSON files
 with open('train.json', 'w') as f:
