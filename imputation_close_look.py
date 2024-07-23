@@ -9,8 +9,8 @@ mean = np.load('mean.npy')
 std = np.load('std.npy')
 
 # Load the imputed data for the entire dataset
-imputed_data_normalized_entire = np.load('./result/brits_special_ground_truths_less_features.npy')
-ground_truth_entire = np.load('./result/brits_special_imputations_less_features.npy')
+imputed_data_normalized_entire = np.load('./result/brits_special_imputations_less_features_started.npy')
+ground_truth_entire = np.load('./result/brits_special_ground_truths_less_features_started.npy')
 
 # Function to denormalize data
 def denormalize_data(normalized_data, mean, std):
@@ -29,9 +29,9 @@ imputed_data_denormalized_entire = denormalize_data(imputed_data_normalized_enti
 imputed_df = pd.DataFrame(imputed_data_denormalized_entire)
 
 # Save the DataFrame to a CSV file
-imputed_df.to_csv('./imputed_data/invalid_imputed_data_less_features.csv', index=False)
+imputed_df.to_csv('./imputed_data/invalid_imputed_data_less_features_started.csv', index=False)
 
-print("Denormalized imputed data saved to './imputed_data/denormalized_imputed_data_less_features.csv'")
+print("Denormalized imputed data saved to './imputed_data/denormalized_imputed_data_less_features_started.csv'")
 
 print(imputed_df.shape[0])
 
@@ -49,6 +49,9 @@ percentage_higher = np.mean(condition) * 100
 print(percentage_higher)
 
 
+# Extract the duration values that are less than 0
+negative_durations = duration_column[duration_column < 0]
+print("Duration values that are less than 0:", len(negative_durations))
 
 # Basic statistics
 mean_duration = np.mean(duration_column)
@@ -73,7 +76,7 @@ plt.show()
 filtered_data = imputed_data_denormalized_entire[condition]
 
 # Save the filtered data to a separate CSV file
-filtered_csv_path = './imputed_data/wrong_imputed_data_less_features.csv'
+filtered_csv_path = './imputed_data/wrong_imputed_data_less_features_started.csv'
 
 # Convert the denormalized data to DataFrame
 imputed_df = pd.DataFrame(filtered_data)

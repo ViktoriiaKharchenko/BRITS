@@ -114,5 +114,5 @@ if __name__ == '__main__':
 
 
     # Save the special imputations and ground truth values separately
-    #np.save('./result/{}_special_imputations_less_features.npy'.format(args.model), special_imputations)
-    #np.save('./result/{}_special_ground_truths_less_features.npy'.format(args.model), special_ground_truths)
+    np.save('./result/{}_special_imputations_less_features_started.npy'.format(args.model), special_imputations)
+    np.save('./result/{}_special_ground_truths_less_features_started.npy'.format(args.model), special_ground_truths)

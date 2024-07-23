@@ -101,13 +101,17 @@ print(f"Percentage of missing values: {percentage_missing}")
 def random_select_time_series(data, sequence_length=36, num_samples=1000):
     time_series_data = []
     ground_truth_data = []
+    timestamps_data = []
+
     max_start_index = len(data) - sequence_length
     random_indices = np.random.randint(0, max_start_index + 1, num_samples)
     for start in random_indices:
         end = start + sequence_length
         time_series_data.append(data.iloc[start:end, 1:37].values)
         ground_truth_data.append(data.iloc[start:end, 37:].values)
-    return np.array(time_series_data), np.array(ground_truth_data)
+        timestamps_data.append(data['datetime'].iloc[start:end].values)
+
+    return np.array(time_series_data), np.array(ground_truth_data), np.array(timestamps_data)
 
 def sequential_select_time_series2(data, sequence_length=36):
     time_series_data = []
@@ -122,38 +126,43 @@ def sequential_select_time_series2(data, sequence_length=36):
 def sequential_select_time_series(data, sequence_length=36):
     time_series_data = []
     ground_truth_data = []
+    timestamps_data = []
+
     for start in range(0, len(data) - sequence_length + 1):
         end = start + sequence_length
         time_series_data.append(data.iloc[start:end, 1:37].values)
         ground_truth_data.append(data.iloc[start:end, 37:].values)
-    return np.array(time_series_data), np.array(ground_truth_data)
+        timestamps_data.append(data['datetime'].iloc[start:end].values)
+
+    return np.array(time_series_data), np.array(ground_truth_data), np.array(timestamps_data)
 
 # Define number of samples you want to select
 num_samples = 6000
 
 # Generate the time series from the training data
-train_series, train_ground_truth = random_select_time_series(train_data, num_samples=num_samples)
+train_series, train_ground_truth, train_timestamps = random_select_time_series(train_data, num_samples=num_samples)
 
 # Generate the time series from the test data
-test_series, test_ground_truth = sequential_select_time_series(test_data)
+test_series, test_ground_truth, test_timestamps = sequential_select_time_series(test_data)
 
 # Display the shapes of the resulting datasets
 print(train_series.shape, train_ground_truth.shape, test_series.shape, test_ground_truth.shape,
  train_data.shape, test_data.shape)
 
 # Filter out invalid time series
-def filter_valid_time_series(series_data, ground_truth_data):
+def filter_valid_time_series(series_data, ground_truth_data, timestamps_data):
     valid_indices = []
     for i in range(series_data.shape[0]):
         series = series_data[i]
         if not np.isnan(series).all(axis=1).any() and not np.isnan(series).all(axis=0).any():
             valid_indices.append(i)
-    return series_data[valid_indices], ground_truth_data[valid_indices]
+    return series_data[valid_indices], ground_truth_data[valid_indices], timestamps_data[valid_indices]
+
 
 
 # Filter training and test data
-train_series_filtered, train_ground_truth_filtered = filter_valid_time_series(train_series, train_ground_truth)
-test_series_filtered, test_ground_truth_filtered = filter_valid_time_series(test_series, test_ground_truth)
+train_series_filtered, train_ground_truth_filtered, train_timestamps_filtered = filter_valid_time_series(train_series, train_ground_truth, train_timestamps)
+test_series_filtered, test_ground_truth_filtered, test_timestamps_filtered = filter_valid_time_series(test_series, test_ground_truth, test_timestamps)
 
 # Display the shapes of the resulting datasets
 print(train_series_filtered.shape, train_ground_truth_filtered.shape, test_series_filtered.shape, test_ground_truth_filtered.shape)
@@ -175,19 +184,25 @@ def normalize_data(train_data, test_data, ground_truth_train, ground_truth_test)
 train_series_normalized, test_series_normalized, train_ground_truth_normalized, test_ground_truth_normalized, mean, std = normalize_data(train_series_filtered, test_series_filtered, train_ground_truth_filtered, test_ground_truth_filtered)
 
 
-# Function to generate masks and deltas
-def generate_masks_and_deltas(values):
+# Function to generate masks and deltas with timestamps
+def generate_masks_and_deltas(values, timestamps):
     masks = ~np.isnan(values)
-    deltas = np.zeros_like(values)
-    deltas[0] = 1
-    for t in range(1, values.shape[0]):
-        deltas[t] = 1 + (1 - masks[t]) * deltas[t - 1]
+    deltas = np.zeros_like(values, dtype=float)
+    deltas[0] = 0  # The first time delta is zero
+    time_diff = np.abs(np.diff(timestamps).astype('timedelta64[m]').astype(int))
+
+    for d in range(values.shape[1]):  # Iterate over each feature
+        for t in range(1, values.shape[0]):  # Iterate over each time step
+            if masks[t, d]:
+                deltas[t, d] = time_diff[t-1]/60
+            else:
+                deltas[t, d] = deltas[t - 1, d] + time_diff[t-1]/60
+
     return masks, deltas
 
-
 # Function to process a time series record
-def process_record(values, ground_truth):
-    masks, deltas = generate_masks_and_deltas(values)
+def process_record(values, ground_truth, timestamps):
+    masks, deltas = generate_masks_and_deltas(values, timestamps)
     eval_masks = masks ^ ~np.isnan(ground_truth)
 
     forwards = pd.DataFrame(values).ffill().fillna(0.0).to_numpy()
@@ -207,9 +222,11 @@ train_records = []
 for i in range(train_series_normalized.shape[0]):
     values = train_series_normalized[i]
     ground_truth = train_ground_truth_normalized[i]
+    timestamps = train_timestamps_filtered[i]
+
     record = {
-        'forward': process_record(values, ground_truth),
-        'backward': process_record(values[::-1], ground_truth[::-1]),
+        'forward': process_record(values, ground_truth, timestamps),
+        'backward': process_record(values[::-1], ground_truth[::-1], timestamps[::-1]),
         'is_train': 1  # Indicates that this record is from the training set
 
     }
@@ -221,8 +238,8 @@ for i in range(test_series_normalized.shape[0]):
     values = test_series_normalized[i]
     ground_truth = test_ground_truth_normalized[i]
     record = {
-        'forward': process_record(values, ground_truth),
-        'backward': process_record(values[::-1], ground_truth[::-1]),
+        'forward': process_record(values, ground_truth, test_timestamps_filtered),
+        'backward': process_record(values[::-1], ground_truth[::-1], test_timestamps_filtered[::-1]),
         'is_train': 0  # Indicates that this record is from the test set
 
     }
