@@ -49,7 +49,8 @@ combined_data_sorted = combined_data.sort_values(by='APPLICATION_TASK_ID')
 print(combined_data_sorted)
 
 # Split the data into training and test sets with stratification
-train_data, test_data = train_test_split(combined_data_sorted, test_size=0.2, random_state=42, stratify=combined_data_sorted['DURATION_MINUTES_3_missing'])
+train_data, test_data = train_test_split(combined_data_sorted, test_size=0.2, random_state=42,
+                                         stratify=combined_data_sorted['DURATION_MINUTES_3_missing'])
 
 # Ensure no overlap by making sure no index in test_data is in train_data
 train_indices = set(train_data.index)
@@ -74,32 +75,37 @@ test_data2 = test_data.sort_values(by='APPLICATION_TASK_ID')
 test_data2.to_csv('test_data2.csv', index=False)
 
 print(train_data2)
+
+
 # Create non-random time series samples of 36 consecutive steps for the test set
 def sequential_select_time_series(data, sequence_length=15):
     time_series_data = []
     ground_truth_data = []
     original_ids = []
+    timestamps_data = []
 
     for start in range(0, len(data) - sequence_length + 1):
         end = start + sequence_length
         # Select the series data
-        time_series = data.iloc[start:end, :22].values
+        time_series = data.iloc[start:end, :25].values
 
         # Select the ground truth data
-        ground_truth = data.iloc[start:end, :22].copy()
+        ground_truth = data.iloc[start:end, :25].copy()
         ground_truth.loc[:, 'STARTED_DATE_hours'] = data.iloc[start:end]['STARTED_DATE_hours_ground'].values
         ground_truth.loc[:, 'DURATION_MINUTES_3'] = data.iloc[start:end]['DURATION_MINUTES_3_ground'].values
 
         time_series_data.append(time_series)
+        timestamps_data.append(data['CREATED_DATE_hours'].iloc[start:end].values)
         ground_truth_data.append(ground_truth.values)
         original_ids.append(data.iloc[start:end]['APPLICATION_TASK_ID'].values)
 
+    return np.array(time_series_data), np.array(ground_truth_data), np.array(original_ids), np.array(timestamps_data)
 
-    return np.array(time_series_data), np.array(ground_truth_data), np.array(original_ids)
 
 # Form sequences from the split data without overlapping
-train_series, train_series_ground_truth, train_original_ids = sequential_select_time_series(train_data2)
-test_series, test_series_ground_truth, test_original_ids = sequential_select_time_series(test_data2)
+train_series, train_series_ground_truth, train_original_ids, train_timestamps = sequential_select_time_series(
+    train_data2)
+test_series, test_series_ground_truth, test_original_ids, test_timestamps = sequential_select_time_series(test_data2)
 
 np.save('val_series_ground_truth.npy', test_series_ground_truth)
 
@@ -128,8 +134,9 @@ def normalize_data(train_data, test_data, ground_truth_train, ground_truth_test)
     return train_data, test_data, ground_truth_train, ground_truth_test, mean, std
 
 
-train_series_normalized, test_series_normalized, train_ground_truth_normalized, test_ground_truth_normalized, mean, std = normalize_data(train_series,
-                                test_series, train_series_ground_truth, test_series_ground_truth)
+train_series_normalized, test_series_normalized, train_ground_truth_normalized, test_ground_truth_normalized, mean, std = normalize_data(
+    train_series,
+    test_series, train_series_ground_truth, test_series_ground_truth)
 
 # Save mean and std to files
 np.save('mean.npy', mean)
@@ -137,18 +144,24 @@ np.save('std.npy', std)
 
 
 # Function to generate masks and deltas
-def generate_masks_and_deltas(values):
+def generate_masks_and_deltas(values, timestamps):
     masks = ~np.isnan(values)
     deltas = np.zeros_like(values)
-    deltas[0] = 1
-    for t in range(1, values.shape[0]):
-        deltas[t] = 1 + (1 - masks[t]) * deltas[t - 1]
+    deltas[0] = 0
+    time_diff = np.abs(np.diff(timestamps))
+
+    for d in range(values.shape[1]):  # Iterate over each feature
+        for t in range(1, values.shape[0]):  # Iterate over each time step
+            if masks[t, d]:
+                deltas[t, d] = time_diff[t-1]
+            else:
+                deltas[t, d] = deltas[t - 1, d] + time_diff[t-1]
+
     return masks, deltas
 
-
 # Function to process a time series record
-def process_record(values, ground_truth, original_ids):
-    masks, deltas = generate_masks_and_deltas(values)
+def process_record(values, ground_truth, original_ids, timestamps):
+    masks, deltas = generate_masks_and_deltas(values, timestamps)
     eval_masks = masks ^ ~np.isnan(ground_truth)
     #count_mask_true_eval_mask_false = np.sum((masks == True) & (eval_masks == False))
 
@@ -166,6 +179,7 @@ def process_record(values, ground_truth, original_ids):
     }
     return record
 
+
 #total_count_mask_true_eval_mask_false = 0
 
 #Process all training records
@@ -174,10 +188,11 @@ for i in range(train_series_normalized.shape[0]):
     values = train_series_normalized[i]
     ground_truth = train_ground_truth_normalized[i]
     original_ids = train_original_ids[i]
+    timestamps = train_timestamps[i]
 
     record = {
-        'forward': process_record(values, ground_truth, original_ids),
-        'backward': process_record(values[::-1], ground_truth[::-1], original_ids),
+        'forward': process_record(values, ground_truth, original_ids, timestamps),
+        'backward': process_record(values[::-1], ground_truth[::-1], original_ids[::-1], timestamps[::-1]),
         'is_train': 1  # Indicates that this record is from the training set
 
     }
@@ -190,10 +205,11 @@ for i in range(test_series_normalized.shape[0]):
     values = test_series_normalized[i]
     ground_truth = test_ground_truth_normalized[i]
     original_ids = test_original_ids[i]
+    timestamps = test_timestamps[i]
 
     record = {
-        'forward': process_record(values, ground_truth, original_ids),
-        'backward': process_record(values[::-1], ground_truth[::-1], original_ids),
+        'forward': process_record(values, ground_truth, original_ids, timestamps),
+        'backward': process_record(values[::-1], ground_truth[::-1], original_ids[::-1], timestamps[::-1]),
         'is_train': 0  # Indicates that this record is from the test set
 
     }
