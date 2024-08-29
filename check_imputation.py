@@ -10,12 +10,14 @@ mean = np.load('mean.npy')
 std = np.load('std.npy')
 
 # Load the imputed data for the entire dataset
-imputed_data_normalized_entire = np.load('./result/brits_test_data_less_features_started.npy')
-ground_truth_entire = np.load('./result/brits_test_ground_truth_less_features_started.npy')
+imputed_data_normalized_entire = np.load('./result/brits_test_data_engineering.npy')
+ground_truth_entire = np.load('./result/brits_test_ground_truth_engineering.npy')
+
+print(imputed_data_normalized_entire.shape)
 
 def denormalize_data(normalized_data, mean, std):
-    mean = mean.mean(axis=0)
-    std = std.mean(axis=0)
+    mean = mean
+    std = std
     denormalized_data = (normalized_data * std) + mean
 
     denormalized_data[:, 0] = np.round(denormalized_data[:, 0])  # Round only the first column
@@ -29,13 +31,13 @@ ground_truth_denormalized_entire = denormalize_data(ground_truth_entire, mean, s
 
 #val_series_ground_truth = np.load('val_series_ground_truth.npy')
 #
-column_index = -1  # Replace with the actual index of STARTED_DATE_hours in your data
+column_index = -5  # Replace with the actual index of STARTED_DATE_hours in your data
 
 
 imputed_started_date_hours_entire = imputed_data_denormalized_entire[:, column_index].flatten()
 ground_truth_started_date_hours_entire = ground_truth_denormalized_entire[:, column_index].flatten()
 
-column_index = 4
+column_index = 5
 
 imputed_duration_minutes_3_entire = imputed_data_denormalized_entire[:, column_index].flatten()
 ground_truth_duration_minutes_3_entire = ground_truth_denormalized_entire[:, column_index].flatten()

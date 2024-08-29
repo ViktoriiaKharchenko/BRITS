@@ -9,15 +9,16 @@ mean = np.load('mean.npy')
 std = np.load('std.npy')
 
 # Load the imputed data for the entire dataset
-imputed_data_normalized_entire = np.load('./result/brits_special_imputations_less_features_started.npy')
-ground_truth_entire = np.load('./result/brits_special_ground_truths_less_features_started.npy')
+imputed_data_normalized_entire = np.load('./result/brits_special_imputations_engineering.npy')
+ground_truth_entire = np.load('./result/brits_special_ground_truths_engineering.npy')
+task_ids = np.load('./result/brits_special_task_ids_engineering.npy')
 
 # Function to denormalize data
 def denormalize_data(normalized_data, mean, std):
     #mean = mean.mean(axis=0)
     #std = std.mean(axis=0)
     denormalized_data = (normalized_data * std) + mean
-    denormalized_data[:, 0] = np.round(denormalized_data[:, 0])  # Round only the first column
+    #denormalized_data[:, 0] = np.round(denormalized_data[:, 0])  # Round only the first column
 
     #return np.round(denormalized_data)
     return denormalized_data
@@ -27,23 +28,21 @@ imputed_data_denormalized_entire = denormalize_data(imputed_data_normalized_enti
 
 # Convert the denormalized data to DataFrame
 imputed_df = pd.DataFrame(imputed_data_denormalized_entire)
+imputed_df['TaskID'] = task_ids
+
+imputed_all_per_task = imputed_df.groupby(task_ids).mean()
 
 # Save the DataFrame to a CSV file
-imputed_df.to_csv('./imputed_data/invalid_imputed_data_less_features_started.csv', index=False)
+imputed_all_per_task.to_csv('./imputed_data/invalid_imputed_data_engineering.csv', index=False)
 
-print("Denormalized imputed data saved to './imputed_data/denormalized_imputed_data_less_features_started.csv'")
+print("Denormalized imputed data saved to './imputed_data/denormalized_imputed_data.csv'")
 
-print(imputed_df.shape[0])
-
-# Get the number of unique task_id values
-task_ids = imputed_data_denormalized_entire[:, 0]
-num_unique_task_ids = len(np.unique(task_ids))
-print(f"Number of unique task_id values: {num_unique_task_ids}")
+print(imputed_all_per_task.shape[0])
 
 # Perform distribution analysis on the imputed duration (4th column)
-duration_column = imputed_data_denormalized_entire[:, 4]
+duration_column = imputed_all_per_task.iloc[:, 5]
 # Calculate the percentage of entries where the value of column 4 is higher than the value of column 3
-created_duration = imputed_data_denormalized_entire[:, 3]
+created_duration = imputed_all_per_task.iloc[:, 4]
 condition = duration_column > created_duration
 percentage_higher = np.mean(condition) * 100
 print(percentage_higher)
@@ -52,6 +51,9 @@ print(percentage_higher)
 # Extract the duration values that are less than 0
 negative_durations = duration_column[duration_column < 0]
 print("Duration values that are less than 0:", len(negative_durations))
+
+duration_column[duration_column < 0] = 1
+
 
 # Basic statistics
 mean_duration = np.mean(duration_column)
@@ -73,10 +75,10 @@ plt.show()
 
 
 # Filter the rows based on the condition
-filtered_data = imputed_data_denormalized_entire[condition]
+filtered_data = imputed_all_per_task[condition]
 
 # Save the filtered data to a separate CSV file
-filtered_csv_path = './imputed_data/wrong_imputed_data_less_features_started.csv'
+filtered_csv_path = './imputed_data/wrong_imputed_data_engineering.csv'
 
 # Convert the denormalized data to DataFrame
 imputed_df = pd.DataFrame(filtered_data)

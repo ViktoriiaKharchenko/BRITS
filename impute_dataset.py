@@ -15,7 +15,7 @@ args = parser.parse_args()
 
 def load_model():
     model = getattr(models, args.model).Model(args.hid_size, args.impute_weight)
-    model.load_state_dict(torch.load('./result/{}_model_less_features_started.pth'.format(args.model)))
+    model.load_state_dict(torch.load('./result/{}_model_fn_required_only2.pth'.format(args.model)))
 
     if torch.cuda.is_available():
         model = model.cuda()
@@ -30,7 +30,12 @@ def impute_entire_dataset(model, dataset_iter):
     special_imputations = []
     special_ground_truths = []
     task_ids_filtered = []
-
+    all_imputations = []
+    all_evals = []
+    all_task_ids = []
+    all_masks = []
+    all_eval_masks = []
+    special_task_ids = []
 
     with torch.no_grad():
         for idx, data in enumerate(dataset_iter):
@@ -58,17 +63,38 @@ def impute_entire_dataset(model, dataset_iter):
                     if np.any((masks[i, t] == 0) & (eval_masks[i, t] == 0)):
                         special_imputations.append(imputation[i, t])
                         special_ground_truths.append(evals[i, t])
+                        special_task_ids.append((task_ids[i, t]))
+
+                    all_imputations.append(imputation[i, t])
+                    all_evals.append(evals[i, t])
+                    all_task_ids.append(task_ids[i, t])
+                    all_masks.append((masks[i, t]))
+                    all_eval_masks.append((eval_masks[i, t]))
 
     # Convert to 2D arrays
 
     imputations_filtered = np.vstack(imputations_filtered)
     ground_truths_filtered = np.vstack(ground_truths_filtered)
     task_ids_filtered = np.array(task_ids_filtered)
+    special_task_ids = np.array(special_task_ids)
 
     special_imputations = np.vstack(special_imputations)
     special_ground_truths = np.vstack(special_ground_truths)
 
-    return imputations_filtered, ground_truths_filtered, task_ids_filtered, special_imputations, special_ground_truths
+    all_imputations = np.vstack(all_imputations)
+    all_evals = np.vstack(all_evals)
+    all_task_ids = np.array(all_task_ids)
+    all_masks = np.vstack(all_masks)
+    all_eval_masks = np.vstack(all_eval_masks)
+
+    np.save('./result/{}_all_imputations_engineering_no_outliers.npy'.format(args.model), all_imputations)
+    np.save('./result/{}_all_evals_engineering_no_outliers.npy'.format(args.model), all_evals)
+    np.save('./result/{}_all_task_ids_engineering_no_outliers.npy'.format(args.model), all_task_ids)
+    np.save('./result/{}_all_masks_engineering_no_outliers.npy'.format(args.model), all_masks)
+    np.save('./result/{}_all_evals_masks_engineering_no_outliers.npy'.format(args.model), all_eval_masks)
+
+    return (imputations_filtered, ground_truths_filtered, task_ids_filtered, special_imputations,
+            special_ground_truths, special_task_ids)
 
 # def impute_entire_dataset(model, dataset_iter):
 #     model.eval()
@@ -95,8 +121,9 @@ if __name__ == '__main__':
     model = load_model()
 
     # Load the combined dataset
-    combined_dataset_iter = data_loader.get_combined_dataset(batch_size=args.batch_size)
-    imputations, ground_truths, task_ids, special_imputations, special_ground_truths = impute_entire_dataset(model, combined_dataset_iter)
+    combined_dataset_iter = data_loader.get_test(batch_size=args.batch_size)
+    imputations, ground_truths, task_ids, special_imputations, special_ground_truths, special_task_ids = (
+        impute_entire_dataset(model, combined_dataset_iter))
 
     print(imputations.shape[0])
     print(ground_truths.shape[0])
@@ -105,14 +132,16 @@ if __name__ == '__main__':
     print(special_ground_truths.shape[0])
 
     # Save the imputations for the entire dataset
-    np.save('./result/{}_entire_data_less_features_started.npy'.format(args.model), imputations)
+    np.save('./result/{}_test_data_engineering_no_outliers.npy'.format(args.model), imputations)
 
     # Save the ground truth values as numpy array
-    np.save('./result/{}_entire_ground_truth_less_features_started.npy'.format(args.model), ground_truths)
+    np.save('./result/{}_test_ground_truth_engineering_no_outliers.npy'.format(args.model), ground_truths)
 
-    np.save('./result/{}_entire_task_ids_less_features_started.npy'.format(args.model), task_ids)
+    np.save('./result/{}_test_task_ids_engineering_no_outliers.npy'.format(args.model), task_ids)
 
 
     # Save the special imputations and ground truth values separately
-    np.save('./result/{}_special_imputations_less_features_started.npy'.format(args.model), special_imputations)
-    np.save('./result/{}_special_ground_truths_less_features_started.npy'.format(args.model), special_ground_truths)
+    np.save('./result/{}_special_imputations_engineering.npy'.format(args.model), special_imputations)
+    np.save('./result/{}_special_ground_truths_engineering.npy'.format(args.model), special_ground_truths)
+    np.save('./result/{}_special_task_ids_engineering.npy'.format(args.model), special_task_ids )
+
